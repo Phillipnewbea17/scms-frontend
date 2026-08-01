@@ -1,0 +1,37 @@
+.admin-layout {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+  background: #f6f8f7;
+}
+
+.admin-layout-content {
+  flex: 1;
+  min-width: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.admin-layout-main {
+  flex: 1;
+  overflow-y: auto;
+}
+
+@media (max-width: 768px) {
+  .admin-layout {
+    display: block;
+    height: auto;
+    overflow: visible;
+  }
+
+  .admin-layout-content {
+    height: auto;
+    overflow: visible;
+  }
+
+  .admin-layout-main {
+    overflow: visible;
+  }
+}
