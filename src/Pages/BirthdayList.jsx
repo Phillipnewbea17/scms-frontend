@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
+import { getSeniorCitizens } from "../services/api";
 import {
   FiSearch,
   FiFilter,
@@ -21,7 +22,7 @@ import "./BirthdayList.css";
 /* Reference "today" for this demo dataset. In a real app, swap      */
 /* every use of TODAY for `new Date()`.                              */
 /* ---------------------------------------------------------------- */
-const TODAY = new Date(2026, 4, 27); // May 27, 2026
+const TODAY = new Date();
 const CURRENT_MONTH = TODAY.getMonth() + 1;
 const CURRENT_YEAR = TODAY.getFullYear();
 
@@ -30,7 +31,7 @@ const MONTH_NAMES = [
   "July", "August", "September", "October", "November", "December",
 ];
 
-const BARANGAYS = ["Poblacion", "San Isidro", "San Roque", "Mahayag", "San Vicente"];
+const BARANGAYS = ["Purok 1", "Purok 2", "Purok 3", "Purok 4", "Purok 5"];
 
 /* ---------------------------------------------------------------- */
 /* Mock data — swap for real API data                                */
@@ -147,7 +148,7 @@ function downloadCSV(filename, rows) {
     "Senior ID", "Full Name", "Birthday", "Age Turning", "Barangay", "Contact Number", "Celebration Status",
   ];
   const csvRows = rows.map((s) => [
-    s.seniorId, s.name, formatFullBirthday(s.birthMonth, s.birthDay, CURRENT_YEAR - s.age),
+   formatFullBirthday(s.birthMonth, s.birthDay, s.birthYear),
     s.age, s.barangay, s.contact, s.celebration,
   ]);
   const csv = [header, ...csvRows].map((r) => r.map((v) => `"${v}"`).join(",")).join("\n");
@@ -423,7 +424,7 @@ function SeniorDetailModal({ senior, onClose }) {
           </div>
           <div className="details-row">
             <span>Birthday</span>
-            <strong>{formatFullBirthday(senior.birthMonth, senior.birthDay, CURRENT_YEAR - senior.age)}</strong>
+            <strong>{formatFullBirthday(senior.birthMonth,senior.birthDay,senior.birthYear)}</strong>
           </div>
           <div className="details-row">
             <span>Age Turning</span>
@@ -465,17 +466,43 @@ const AGE_RANGES = [
 const SORT_OPTIONS = ["Nearest Birthday", "Name (A-Z)", "Youngest First", "Oldest First"];
 
 export default function BirthdayList() {
-  const seniors = useMemo(
-    () =>
-      BASE_SENIORS.map((s) => ({
-        ...s,
-        daysUntil: daysUntilBirthday(s.birthMonth, s.birthDay),
-      })),
-    []
-  );
+  const [seniors, setSeniors] = useState([]);
+
+useEffect(() => {
+  getSeniorCitizens()
+    .then((data) => {
+      const formattedSeniors = data
+        .filter((r) => r.birth_date)
+        .map((r) => {
+          const birthDate = String(r.birth_date).slice(0, 10);
+          const [birthYear, birthMonth, birthDay] = birthDate
+            .split("-")
+            .map(Number);
+
+          return {
+            id: r.id,
+            seniorId: r.senior_id,
+            name: r.name,
+            birthYear,
+            birthMonth,
+            birthDay,
+            age: r.age,
+            barangay: r.purok,
+            contact: r.contact || "",
+            celebration: "Pending",
+            daysUntil: daysUntilBirthday(birthMonth, birthDay),
+          };
+        });
+
+      setSeniors(formattedSeniors);
+    })
+    .catch((error) => {
+      console.error("Failed to load birthday list:", error);
+    });
+}, []);
 
   const [searchName, setSearchName] = useState("");
-  const [barangayFilter, setBarangayFilter] = useState("All Barangays");
+  const [barangayFilter, setBarangayFilter] = useState("All Puroks");
   const [monthFilter, setMonthFilter] = useState("All Months");
   const [ageFilter, setAgeFilter] = useState("All Ages");
   const [sortBy, setSortBy] = useState("Nearest Birthday");
@@ -531,7 +558,7 @@ export default function BirthdayList() {
       list = list.filter((s) => s.birthMonth === monthIndex);
     }
 
-    if (barangayFilter !== "All Barangays") {
+    if (barangayFilter !== "All Puroks") {
       list = list.filter((s) => s.barangay === barangayFilter);
     }
 
@@ -700,14 +727,14 @@ export default function BirthdayList() {
               </div>
 
               <div className="filter-field" ref={barangayRef}>
-                <label>Barangay</label>
+                <label>Purok</label>
                 <button type="button" className="select-btn" onClick={() => setBarangayOpen((o) => !o)}>
                   {barangayFilter}
                   <FiChevronDown className={`chevron${barangayOpen ? " open" : ""}`} />
                 </button>
                 {barangayOpen && (
                   <div className="dropdown-menu">
-                    {["All Barangays", ...BARANGAYS].map((b) => (
+                    {["All Puroks", ...BARANGAYS].map((b) => (
                       <button
                         key={b}
                         type="button"

@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
+import {getApplications,getAnnouncements,getSeniorCitizens,} from "../services/api";
 import {
   FiUsers,
   FiClock,
@@ -6,7 +7,6 @@ import {
   FiXCircle,
   FiTrendingUp,
   FiVolume2,
-  FiHeart,
   FiCalendar,
   FiChevronDown,
   FiInfo,
@@ -20,6 +20,7 @@ import "./Dashboard.css";
 /* ---------------------------------------------------------------- */
 /* Mock data — swap these for real API data                          */
 /* ---------------------------------------------------------------- */
+
 
 const STATS = [
   {
@@ -88,11 +89,7 @@ const BIRTHDAYS = [
   { id: 3, name: "Elena Cruz", date: "August 2, 1944", age: 82, note: "Birthday in 5 days" },
 ];
 
-const ANNIVERSARIES = [
-  { id: 1, title: "85th Anniversary", names: "Soledad Reyes", date: "July 28, 2026" },
-  { id: 2, title: "50th Anniversary", names: "Benjamin & Rosario Santos", date: "July 30, 2026" },
-  { id: 3, title: "60th Anniversary", names: "Pedro & Milagros Dela Cruz", date: "August 5, 2026" },
-];
+
 
 /* Application statistics per period, used to drive the donut chart */
 const APPLICATION_STATS = {
@@ -148,8 +145,8 @@ function useOutsideClose(onClose) {
 function DonutChart({ verified, pending, total }) {
   const radius = 64;
   const circumference = 2 * Math.PI * radius;
-  const verifiedPct = verified / total;
-  const pendingPct = pending / total;
+  const verifiedPct = total > 0 ? verified / total : 0;
+const pendingPct = total > 0 ? pending / total : 0;
 
   const verifiedLen = circumference * verifiedPct;
   const pendingLen = circumference * pendingPct;
@@ -196,9 +193,192 @@ export default function Dashboard({
   onViewAllApplicants,
   onViewAllAnnouncements,
   onViewAllBirthdays,
-  onViewAllAnniversaries,
   onSelectApplicant,
 }) {
+  const [applications, setApplications] = useState([]);
+  const [announcements, setAnnouncements] = useState([]);
+  const [seniors, setSeniors] = useState([]);
+
+useEffect(() => {
+  getApplications()
+    .then((data) => {
+      setApplications(data);
+    })
+    .catch((error) => {
+      console.error("Failed to load dashboard applications:", error);
+    });
+}, []);
+
+useEffect(() => {
+  getAnnouncements()
+    .then((data) => {
+      setAnnouncements(data);
+    })
+    .catch((error) => {
+      console.error("Failed to load dashboard announcements:", error);
+    });
+}, []);
+
+useEffect(() => {
+  getSeniorCitizens()
+    .then((data) => {
+      setSeniors(data);
+    })
+    .catch((error) => {
+      console.error("Failed to load dashboard seniors:", error);
+    });
+}, []);
+
+const dashboardStats = STATS.map((stat) => ({
+  ...stat,
+  value:
+    stat.key === "total"
+      ? applications.length
+      : stat.key === "pending"
+      ? applications.filter((a) => a.status === "Pending").length
+      : stat.key === "verified"
+      ? applications.filter((a) => a.status === "Verified").length
+      : stat.key === "rejected"
+      ? applications.filter((a) => a.status === "Rejected").length
+      : stat.value,
+}));
+
+const recentApplicants = applications.slice(0, 5).map((a) => ({
+  id: a.id,
+  name: a.name,
+  date: new Date(a.submitted_at).toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  }),
+  time: new Date(a.submitted_at).toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+  }),
+  status: a.status,
+}));
+
+const applicationStats = {
+  "This Month": {
+    newRegistrations: applications.filter((a) => {
+      const d = new Date(a.submitted_at);
+      const now = new Date();
+
+      return (
+        d.getMonth() === now.getMonth() &&
+        d.getFullYear() === now.getFullYear()
+      );
+    }).length,
+
+    verified: applications.filter((a) => {
+      const d = new Date(a.submitted_at);
+      const now = new Date();
+
+      return (
+        a.status === "Verified" &&
+        d.getMonth() === now.getMonth() &&
+        d.getFullYear() === now.getFullYear()
+      );
+    }).length,
+
+    pending: applications.filter((a) => {
+      const d = new Date(a.submitted_at);
+      const now = new Date();
+
+      return (
+        a.status === "Pending" &&
+        d.getMonth() === now.getMonth() &&
+        d.getFullYear() === now.getFullYear()
+      );
+    }).length,
+
+    insight: 0,
+  },
+
+  "Last Month": {
+    newRegistrations: applications.filter((a) => {
+      const d = new Date(a.submitted_at);
+      const lastMonth = new Date();
+      lastMonth.setMonth(lastMonth.getMonth() - 1);
+
+      return (
+        d.getMonth() === lastMonth.getMonth() &&
+        d.getFullYear() === lastMonth.getFullYear()
+      );
+    }).length,
+
+    verified: applications.filter((a) => {
+      const d = new Date(a.submitted_at);
+      const lastMonth = new Date();
+      lastMonth.setMonth(lastMonth.getMonth() - 1);
+
+      return (
+        a.status === "Verified" &&
+        d.getMonth() === lastMonth.getMonth() &&
+        d.getFullYear() === lastMonth.getFullYear()
+      );
+    }).length,
+
+    pending: applications.filter((a) => {
+      const d = new Date(a.submitted_at);
+      const lastMonth = new Date();
+      lastMonth.setMonth(lastMonth.getMonth() - 1);
+
+      return (
+        a.status === "Pending" &&
+        d.getMonth() === lastMonth.getMonth() &&
+        d.getFullYear() === lastMonth.getFullYear()
+      );
+    }).length,
+
+    insight: 0,
+  },
+};
+
+const birthdays = seniors
+  .filter((s) => s.birth_date)
+  .map((s) => {
+    const birthDate = String(s.birth_date).slice(0, 10);
+    const [year, month, day] = birthDate.split("-").map(Number);
+
+    const today = new Date();
+    const nextBirthday = new Date(today.getFullYear(), month - 1, day);
+
+    if (nextBirthday < new Date(today.getFullYear(), today.getMonth(), today.getDate())) {
+      nextBirthday.setFullYear(today.getFullYear() + 1);
+    }
+
+    const todayStart = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate()
+    );
+
+    const daysUntil = Math.round(
+      (nextBirthday - todayStart) / (1000 * 60 * 60 * 24)
+    );
+
+    return {
+      id: s.id,
+      name: s.name,
+      date: new Date(year, month - 1, day).toLocaleDateString("en-US", {
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+      }),
+      age: s.age,
+      note:
+        daysUntil === 0
+          ? "Birthday Today"
+          : daysUntil === 1
+          ? "Birthday Tomorrow"
+          : `Birthday in ${daysUntil} days`,
+      daysUntil,
+    };
+  })
+  .sort((a, b) => a.daysUntil - b.daysUntil)
+  .slice(0, 3);
+
   const [selectedDate, setSelectedDate] = useState(DATE_OPTIONS[0]);
   const [dateOpen, setDateOpen] = useState(false);
   const dateRef = useOutsideClose(() => setDateOpen(false));
@@ -207,8 +387,12 @@ export default function Dashboard({
   const [periodOpen, setPeriodOpen] = useState(false);
   const periodRef = useOutsideClose(() => setPeriodOpen(false));
 
-  const stats = APPLICATION_STATS[period];
+  const stats = applicationStats[period];
   const totalThisPeriod = stats.newRegistrations;
+
+    const [apiMessage, setApiMessage] = useState("");
+
+  
 
   return (
     <div className="dashboard">
@@ -216,7 +400,9 @@ export default function Dashboard({
       <div className="dashboard-heading">
         <div>
           <h1>Dashboard</h1>
-          <p>Overview of senior citizen applications and system updates.</p>
+<p>Overview of senior citizen applications and system updates.</p>
+
+
         </div>
 
         <div className="date-picker" ref={dateRef}>
@@ -251,9 +437,10 @@ export default function Dashboard({
 
       {/* Stat cards */}
       <div className="stats-grid">
-        {STATS.map((s) => (
-          <StatCard key={s.key} {...s} />
-        ))}
+      {dashboardStats.map(({ key, ...stat }) => (
+  <StatCard key={key} {...stat} />
+))}
+       
       </div>
 
       {/* Row 1: Recent applicants / Application statistics / Announcements */}
@@ -274,7 +461,7 @@ export default function Dashboard({
           </div>
 
           <div className="applicant-list">
-            {RECENT_APPLICANTS.map((a) => (
+           {recentApplicants.map((a) => (
               <button
                 key={a.id}
                 type="button"
@@ -405,7 +592,7 @@ export default function Dashboard({
           </div>
 
           <div className="announcement-list">
-            {ANNOUNCEMENTS.map((a) =>
+            {announcements.map((a) =>
               a.pinned ? (
                 <div key={a.id} className="pinned-announcement">
                   <div className="pinned-label">
@@ -445,7 +632,7 @@ export default function Dashboard({
           </div>
 
           <div className="birthday-grid">
-            {BIRTHDAYS.map((b) => (
+            {birthdays.map((b) => (
               <div key={b.id} className="birthday-card">
                 <span className="birthday-avatar">
                   <FiUsers />
@@ -456,38 +643,6 @@ export default function Dashboard({
                 </span>
                 <span className="birthday-note">
                   <PiCakeDuotone /> {b.note}
-                </span>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="panel">
-          <div className="panel-header">
-            <h2>
-              <FiHeart className="panel-header-icon" />
-              Anniversary Reminder
-            </h2>
-            <button
-              type="button"
-              className="btn-outline btn-sm"
-              onClick={onViewAllAnniversaries}
-            >
-              View All
-            </button>
-          </div>
-
-          <div className="anniversary-list">
-            {ANNIVERSARIES.map((a) => (
-              <div key={a.id} className="anniversary-row">
-                <span className="anniversary-icon">
-                  <FiHeart />
-                </span>
-                <span className="anniversary-info">
-                  <span className="anniversary-title">{a.title}</span>
-                  <span className="anniversary-meta">
-                    {a.names} &bull; {a.date}
-                  </span>
                 </span>
               </div>
             ))}

@@ -1,3 +1,4 @@
+import { getAnnouncements, createAnnouncement, updateAnnouncement, deleteAnnouncement,} from "../services/api";
 import React, { useState, useMemo, useRef, useEffect } from "react";
 import {
   FiSearch,
@@ -176,7 +177,7 @@ function AnnouncementModal({ initial, onClose, onSave }) {
 /* ---------------------------------------------------------------- */
 
 export default function Announcements() {
-  const [announcements, setAnnouncements] = useState(INITIAL_ANNOUNCEMENTS);
+  const [announcements, setAnnouncements] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState("Newest First");
   const [sortOpen, setSortOpen] = useState(false);
@@ -184,6 +185,26 @@ export default function Announcements() {
   const [modalMode, setModalMode] = useState(null); // null | "create" | announcement object being edited
 
   const sortRef = useOutsideClose(() => setSortOpen(false));
+
+useEffect(() => {
+  getAnnouncements()
+    .then((data) => {
+      const formattedAnnouncements = data.map((a) => ({
+        id: a.id,
+        title: a.title,
+        date: a.date ? String(a.date).slice(0, 10) : "",
+        description: a.description || "",
+        status: a.status || "Active",
+        pinned: Boolean(a.pinned),
+        iconIndex: a.icon_index ?? 0,
+      }));
+
+      setAnnouncements(formattedAnnouncements);
+    })
+    .catch((error) => {
+      console.error("Failed to load announcements:", error);
+    });
+}, []);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -214,45 +235,161 @@ export default function Announcements() {
   const page = Math.min(currentPage, totalPages);
   const paginated = list.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-  const togglePin = (id) => {
-    setAnnouncements((prev) =>
-      prev.map((a) => ({ ...a, pinned: a.id === id ? !a.pinned : false }))
-    );
-  };
+  const togglePin = async (id) => {
+  const selected = announcements.find((a) => a.id === id);
 
-  const toggleStatus = (id) => {
+  if (!selected) return;
+
+  const newPinnedValue = !selected.pinned;
+
+  try {
+    // Unpin all others first in the database
+    if (newPinnedValue) {
+      const othersPinned = announcements.filter(
+        (a) => a.pinned && a.id !== id
+      );
+
+      for (const item of othersPinned) {
+        await updateAnnouncement(item.id, {
+          pinned: false,
+        });
+      }
+    }
+
+    const updated = await updateAnnouncement(id, {
+      pinned: newPinnedValue,
+    });
+
+    setAnnouncements((prev) =>
+      prev.map((a) => ({
+        ...a,
+        pinned:
+          a.id === id
+            ? Boolean(updated.pinned)
+            : newPinnedValue
+            ? false
+            : a.pinned,
+      }))
+    );
+  } catch (error) {
+    console.error("Failed to pin announcement:", error);
+    alert("Unable to update pinned announcement.");
+  }
+};
+
+ const toggleStatus = async (id) => {
+  const selected = announcements.find((a) => a.id === id);
+
+  if (!selected) return;
+
+  const newStatus =
+    selected.status === "Active" ? "Archived" : "Active";
+
+  try {
+    const updated = await updateAnnouncement(id, {
+      status: newStatus,
+    });
+
     setAnnouncements((prev) =>
       prev.map((a) =>
-        a.id === id ? { ...a, status: a.status === "Active" ? "Archived" : "Active" } : a
+        a.id === id
+          ? {
+              ...a,
+              status: updated.status,
+            }
+          : a
       )
     );
-  };
+  } catch (error) {
+    console.error("Failed to update announcement status:", error);
+    alert("Unable to update announcement status.");
+  }
+};
 
-  const deleteAnnouncement = (id) => {
-    if (window.confirm("Delete this announcement? This cannot be undone.")) {
-      setAnnouncements((prev) => prev.filter((a) => a.id !== id));
-    }
-  };
+ const handleDeleteAnnouncement = async (id) => {
+  if (!window.confirm("Delete this announcement? This cannot be undone.")) {
+    return;
+  }
 
-  const handleSave = (form) => {
-    if (modalMode === "create") {
-      const newItem = {
-        id: Date.now(),
+  try {
+    await deleteAnnouncement(id);
+
+    setAnnouncements((prev) =>
+      prev.filter((a) => a.id !== id)
+    );
+  } catch (error) {
+    console.error("Failed to delete announcement:", error);
+    alert("Unable to delete announcement.");
+  }
+};
+
+const handleSave = async (form) => {
+  if (modalMode === "create") {
+    try {
+      const iconIndex = Math.floor(Math.random() * ICONS.length);
+
+      const created = await createAnnouncement({
         title: form.title,
         date: form.date,
         description: form.description,
         status: "Active",
         pinned: false,
-        iconIndex: Math.floor(Math.random() * ICONS.length),
+        icon_index: iconIndex,
+      });
+
+      const newItem = {
+        id: created.id,
+        title: created.title,
+        date: created.date ? String(created.date).slice(0, 10) : "",
+        description: created.description || "",
+        status: created.status || "Active",
+        pinned: Boolean(created.pinned),
+        iconIndex: created.icon_index ?? iconIndex,
       };
+
       setAnnouncements((prev) => [newItem, ...prev]);
-    } else if (modalMode && modalMode.id) {
-      setAnnouncements((prev) =>
-        prev.map((a) => (a.id === modalMode.id ? { ...a, ...form } : a))
-      );
+      setModalMode(null);
+    } catch (error) {
+      console.error("Failed to create announcement:", error);
+      alert("Unable to create announcement.");
     }
-    setModalMode(null);
-  };
+
+    return;
+  }
+
+  if (modalMode && modalMode.id) {
+    try {
+      const updated = await updateAnnouncement(modalMode.id, {
+        title: form.title,
+        date: form.date,
+        description: form.description,
+      });
+
+      setAnnouncements((prev) =>
+        prev.map((a) =>
+          a.id === modalMode.id
+            ? {
+                ...a,
+                title: updated.title,
+                date: updated.date
+                  ? String(updated.date).slice(0, 10)
+                  : "",
+                description: updated.description || "",
+                status: updated.status || a.status,
+                pinned: Boolean(updated.pinned),
+                iconIndex: updated.icon_index ?? a.iconIndex,
+              }
+            : a
+        )
+      );
+
+      setModalMode(null);
+    } catch (error) {
+      console.error("Failed to edit announcement:", error);
+      alert("Unable to update announcement.");
+    }
+  }
+};
 
   return (
     <div className="announcements">
@@ -395,7 +532,7 @@ export default function Announcements() {
                   type="button"
                   className="icon-square delete"
                   title="Delete announcement"
-                  onClick={() => deleteAnnouncement(a.id)}
+                 onClick={() => handleDeleteAnnouncement(a.id)}
                 >
                   <FiTrash2 />
                 </button>

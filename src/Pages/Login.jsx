@@ -1,7 +1,9 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { loginUser } from "../services/api";
 import "./Login.css";
 import { FaUsers, FaUser, FaEye, FaEyeSlash } from "react-icons/fa";
+
 
 /**
  * Props:
@@ -19,18 +21,37 @@ export default function Login({ onLoginSuccess }) {
   const [remember, setRemember] = useState(false);
   const [error, setError] = useState("");
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
+ const handleSubmit = async (e) => {
+  e.preventDefault();
 
-    if (!username.trim() || !password.trim()) {
-      setError("Please enter both username and password.");
-      return;
-    }
+  if (!username.trim() || !password.trim()) {
+    setError("Please enter both username and password.");
+    return;
+  }
 
+  try {
     setError("");
-    onLoginSuccess(username.trim(), remember);
+
+    const data = await loginUser(
+      username.trim(),
+      password
+    );
+
+    if (remember) {
+  localStorage.setItem("scms_token", data.token);
+  sessionStorage.removeItem("scms_token");
+} else {
+  sessionStorage.setItem("scms_token", data.token);
+  localStorage.removeItem("scms_token");
+}
+
+    onLoginSuccess(data.user.name, remember);
+
     navigate("/dashboard", { replace: true });
-  };
+  } catch (error) {
+    setError(error.message || "Invalid username or password.");
+  }
+};
 
   return (
     <div className="login-container">

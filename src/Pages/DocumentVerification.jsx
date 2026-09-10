@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
+import { getApplications,updateApplication, deleteApplication,} from "../services/api";
 import {
   FiSearch,
   FiFilter,
@@ -170,12 +171,6 @@ const PRIORITY_OPTIONS = ["High", "Medium", "Low"];
 
 /* Header stat cards can reflect broader backend totals, independent of the
    paginated table sample above — swap these for real aggregate counts. */
-const HEADER_STATS = {
-  total: 248,
-  pending: 78,
-  verified: 152,
-  rejected: 18,
-};
 
 /* ---------------------------------------------------------------- */
 /* Helpers                                                            */
@@ -436,7 +431,16 @@ function ApplicantPanel({ applicant, onClose, onDecision }) {
 /* ---------------------------------------------------------------- */
 
 export default function DocumentVerification() {
-  const [applicants, setApplicants] = useState(INITIAL_APPLICANTS);
+ const [applicants, setApplicants] = useState([]);
+ const headerStats = useMemo(
+  () => ({
+    total: applicants.length,
+    pending: applicants.filter((a) => a.status === "Pending").length,
+    verified: applicants.filter((a) => a.status === "Verified").length,
+    rejected: applicants.filter((a) => a.status === "Rejected").length,
+  }),
+  [applicants]
+);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState("All");
   const [sortBy, setSortBy] = useState("Newest First");
@@ -451,9 +455,51 @@ export default function DocumentVerification() {
   const filterRef = useOutsideClose(() => setFilterOpen(false));
   const kebabRef = useOutsideClose(() => setKebabOpenId(null));
 
+useEffect(() => {
+  getApplications()
+    .then((data) => {
+      const formattedApplicants = data.map((a) => ({
+        id: a.id,
+        appId: a.application_id,
+        name: a.name,
+        submittedAt: a.submitted_at,
+        status: a.status,
+        priority: a.priority,
+        contact: a.contact || "",
+        barangay: a.purok || "",
+        age: a.age || "",
+        birthday: a.birth_date
+          ? new Date(
+              `${String(a.birth_date).slice(0, 10)}T00:00:00`
+            ).toLocaleDateString("en-US", {
+              month: "long",
+              day: "numeric",
+              year: "numeric",
+            })
+          : "-",
+
+        documents: makeDocs([
+          Boolean(a.valid_id_uploaded),
+          Boolean(a.birth_certificate_uploaded),
+          Boolean(a.proof_residence_uploaded),
+          Boolean(a.photo_uploaded),
+        ]),
+
+        notes: a.notes || "",
+        history: Array.isArray(a.history) ? a.history : [],
+      }));
+
+      setApplicants(formattedApplicants);
+    })
+    .catch((error) => {
+      console.error("Failed to load applications:", error);
+    });
+}, []);
+
   useEffect(() => {
     setCurrentPage(1);
   }, [searchQuery, activeTab, priorityFilter, sortBy]);
+
 
   const counts = useMemo(
     () => ({
@@ -497,30 +543,70 @@ export default function DocumentVerification() {
 
   const selectedApplicant = applicants.find((a) => a.id === selectedId) || null;
 
-  const handleDecision = (id, status, notes) => {
+  const handleDecision = async (id, status, notes) => {
+  const selected = applicants.find((a) => a.id === id);
+
+  if (!selected) return;
+
+  const newHistory = [
+    ...selected.history,
+    {
+      date: new Date().toLocaleString("en-US", {
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      }),
+      action: `Marked as ${status}`,
+    },
+  ];
+
+  try {
+    const updated = await updateApplication(id, {
+      status,
+      notes,
+      history: newHistory,
+    });
+
     setApplicants((prev) =>
       prev.map((a) =>
         a.id === id
           ? {
               ...a,
-              status,
-              notes,
-              history: [
-                ...a.history,
-                {
-                  date: new Date().toLocaleDateString("en-US", {
-                    month: "long",
-                    day: "numeric",
-                    year: "numeric",
-                  }),
-                  action: `Marked as ${status}`,
-                },
-              ],
+              status: updated.status,
+              notes: updated.notes || "",
+              history: Array.isArray(updated.history)
+                ? updated.history
+                : newHistory,
             }
           : a
       )
     );
-  };
+  } catch (error) {
+    console.error("Failed to update application:", error);
+    alert("Unable to update application.");
+  }
+};
+
+const handleRemoveApplication = async (id) => {
+  const confirmed = window.confirm(
+    "Remove this application? This cannot be undone."
+  );
+
+  if (!confirmed) return;
+
+  try {
+    await deleteApplication(id);
+
+    setApplicants((prev) =>
+      prev.filter((applicant) => applicant.id !== id)
+    );
+  } catch (error) {
+    console.error("Failed to delete application:", error);
+    alert("Unable to remove application.");
+  }
+};
 
   const togglePriority = (p) => {
     setPriorityFilter((prev) =>
@@ -607,7 +693,7 @@ export default function DocumentVerification() {
             </span>
             <div className="stat-body">
               <span className="stat-label">Total Applications</span>
-              <span className="stat-value">{HEADER_STATS.total}</span>
+              <span className="stat-value">{headerStats.total}</span>
               <span className="stat-sublabel">All time total</span>
             </div>
           </div>
@@ -617,7 +703,7 @@ export default function DocumentVerification() {
             </span>
             <div className="stat-body">
               <span className="stat-label">Pending Verification</span>
-              <span className="stat-value">{HEADER_STATS.pending}</span>
+              <span className="stat-value">{headerStats.pending}</span>
               <span className="stat-sublabel">Needs review</span>
             </div>
           </div>
@@ -627,7 +713,7 @@ export default function DocumentVerification() {
             </span>
             <div className="stat-body">
               <span className="stat-label">Verified</span>
-              <span className="stat-value">{HEADER_STATS.verified}</span>
+              <span className="stat-value">{headerStats.verified}</span>
               <span className="stat-sublabel">Approved documents</span>
             </div>
           </div>
@@ -637,7 +723,7 @@ export default function DocumentVerification() {
             </span>
             <div className="stat-body">
               <span className="stat-label">Rejected</span>
-              <span className="stat-value">{HEADER_STATS.rejected}</span>
+              <span className="stat-value">{headerStats.rejected}</span>
               <span className="stat-sublabel">Rejected applications</span>
             </div>
           </div>
@@ -767,13 +853,13 @@ export default function DocumentVerification() {
                                 >
                                   View Details
                                 </button>
-                                <button
-                                  type="button"
-                                  className="dropdown-item danger"
-                                  onClick={() => setKebabOpenId(null)}
-                                >
-                                  Remove Application
-                                </button>
+                               <button
+                        type="button"
+                              className="dropdown-item danger"
+                                  onClick={() => { handleRemoveApplication(a.id); setKebabOpenId(null); }}
+                                        >
+                                     Remove Application
+                                        </button>
                               </div>
                             )}
                           </div>

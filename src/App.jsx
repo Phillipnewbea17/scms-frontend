@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
-
+import { logoutUser } from "./services/api";
 import Login from "./Pages/Login";
 import AdminLayout from "./Pages/AdminLayout";
 import Dashboard from "./Pages/Dashboard";
@@ -13,6 +13,7 @@ import "./index.css";
 
 const AUTH_KEY = "scms_is_authenticated";
 const NAME_KEY = "scms_admin_name";
+const TOKEN_KEY = "scms_token";
 
 /* Blocks a route unless the person is logged in, sending them to /login otherwise. */
 function ProtectedRoute({ isAuthenticated, children }) {
@@ -22,9 +23,11 @@ function ProtectedRoute({ isAuthenticated, children }) {
 export default function App() {
   // "Remember me" persists the session in localStorage; otherwise it's
   // just in-memory state and clears on refresh.
-  const [isAuthenticated, setIsAuthenticated] = useState(
-    () => localStorage.getItem(AUTH_KEY) === "true"
-  );
+ const [isAuthenticated, setIsAuthenticated] = useState(
+  () =>
+    Boolean(localStorage.getItem(TOKEN_KEY)) ||
+    Boolean(sessionStorage.getItem(TOKEN_KEY))
+);
   const [adminName, setAdminName] = useState(
     () => localStorage.getItem(NAME_KEY) || "Admin"
   );
@@ -38,11 +41,19 @@ export default function App() {
     }
   };
 
-  const handleLogout = () => {
+ const handleLogout = async () => {
+  try {
+    await logoutUser();
+  } catch (error) {
+    console.error("Laravel logout failed:", error);
+  } finally {
     localStorage.removeItem(AUTH_KEY);
     localStorage.removeItem(NAME_KEY);
+   sessionStorage.removeItem(TOKEN_KEY);
+
     setIsAuthenticated(false);
-  };
+  }
+};
 
   return (
     <Routes>

@@ -648,53 +648,6 @@
   color: var(--d-green);
 }
 
-/* ---------------- Anniversary reminder ---------------- */
-.dashboard .anniversary-list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.dashboard .anniversary-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 4px;
-  border-bottom: 1px solid var(--d-border);
-}
-
-.dashboard .anniversary-row:last-child {
-  border-bottom: none;
-}
-
-.dashboard .anniversary-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  background: var(--d-green-bg);
-  color: var(--d-green);
-  font-size: 15px;
-  flex-shrink: 0;
-}
-
-.dashboard .anniversary-info {
-  display: flex;
-  flex-direction: column;
-}
-
-.dashboard .anniversary-title {
-  font-size: 13.5px;
-  font-weight: 700;
-  color: var(--d-text);
-}
-
-.dashboard .anniversary-meta {
-  font-size: 12px;
-  color: var(--d-text-muted);
-}
 
 /* ============================================
    RESPONSIVE

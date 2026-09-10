@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
+import { getSeniorCitizens, createSeniorCitizen,  deleteSeniorCitizen,  updateSeniorCitizen} from "../services/api";
 import {
   FiSearch,
   FiFilter,
@@ -176,7 +177,7 @@ function downloadCSV(filename, rows) {
 /* Add New Senior modal                                              */
 /* ---------------------------------------------------------------- */
 
-const EMPTY_FORM = { name: "", age: "", gender: "Male", purok: PUROKS[0], contact: "" };
+const EMPTY_FORM = {name: "",age: "",birthDate: "",gender: "Male",purok: PUROKS[0],contact: "",};
 
 function AddSeniorModal({ onClose, onSave }) {
   const [form, setForm] = useState(EMPTY_FORM);
@@ -202,6 +203,9 @@ function AddSeniorModal({ onClose, onSave }) {
         <form onSubmit={submit} className="modal-form">
           <label className="field-label">Full Name</label>
           <input className="field-input" type="text" value={form.name} onChange={update("name")} required />
+
+              <label className="field-label">Birth Date</label>
+                <input className="field-input" type="date" value={form.birthDate} onChange={update("birthDate")}/>
 
           <div className="field-row">
             <div>
@@ -246,10 +250,465 @@ function AddSeniorModal({ onClose, onSave }) {
 /* ---------------------------------------------------------------- */
 /* Side panel                                                         */
 /* ---------------------------------------------------------------- */
+function EditSeniorModal({ record, onClose, onSave }) {
+  const [form, setForm] = useState({
+    name: record.name || "",
+    age: record.age || "",
+    birthDate: record.birthDate || "",
+    gender: record.gender || "Male",
+    purok: record.purok || PUROKS[0],
+    contact: record.contact || "",
+
+    bloodType: record.medical?.bloodType || "",
+    condition: record.medical?.condition || "",
+    maintenance: record.medical?.maintenance || "",
+    lastCheckup:
+      record.medical?.lastCheckup &&
+      record.medical.lastCheckup !== "-"
+        ? String(record.medical.lastCheckup).slice(0, 10)
+        : "",
+
+    civilStatus: record.other?.civilStatus || "",
+    emergencyContact: record.other?.emergencyContact || "",
+    relationship: record.other?.relationship || "",
+    oscaId: record.other?.oscaId || "Active",
+  });
+
+  const update = (field) => (e) => {
+    setForm((prev) => ({
+      ...prev,
+      [field]: e.target.value,
+    }));
+  };
+
+  const submit = (e) => {
+    e.preventDefault();
+    onSave(record.id, form);
+  };
+
+  return (
+    <div className="modal-overlay" onMouseDown={onClose}>
+      <div
+        className="modal-card"
+        onMouseDown={(e) => e.stopPropagation()}
+        style={{ maxHeight: "90vh", overflowY: "auto" }}
+      >
+        <div className="modal-header">
+          <h3>Edit Senior Record</h3>
+
+          <button
+            type="button"
+            className="modal-close"
+            onClick={onClose}
+          >
+            <FiX />
+          </button>
+        </div>
+
+        <form onSubmit={submit} className="modal-form">
+          <label className="field-label">Full Name</label>
+          <input
+            className="field-input"
+            type="text"
+            value={form.name}
+            onChange={update("name")}
+            required
+          />
+
+          <label className="field-label">Birth Date</label>
+              <input className="field-input" type="date" value={form.birthDate} onChange={update("birthDate")}/>
+
+          <div className="field-row">
+            <div>
+              <label className="field-label">Age</label>
+              <input
+                className="field-input"
+                type="number"
+                min="60"
+                value={form.age}
+                onChange={update("age")}
+                required
+              />
+            </div>
+
+            <div>
+              <label className="field-label">Gender</label>
+              <select
+                className="field-input"
+                value={form.gender}
+                onChange={update("gender")}
+              >
+                {GENDERS.map((g) => (
+                  <option key={g} value={g}>
+                    {g}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="field-row">
+            <div>
+              <label className="field-label">Purok</label>
+              <select
+                className="field-input"
+                value={form.purok}
+                onChange={update("purok")}
+              >
+                {PUROKS.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="field-label">Contact Number</label>
+              <input
+                className="field-input"
+                type="text"
+                value={form.contact}
+                onChange={update("contact")}
+              />
+            </div>
+          </div>
+
+          <h4>Medical Information</h4>
+
+          <div className="field-row">
+            <div>
+              <label className="field-label">Blood Type</label>
+              <input
+                className="field-input"
+                type="text"
+                value={form.bloodType}
+                onChange={update("bloodType")}
+              />
+            </div>
+
+            <div>
+              <label className="field-label">Condition</label>
+              <input
+                className="field-input"
+                type="text"
+                value={form.condition}
+                onChange={update("condition")}
+              />
+            </div>
+          </div>
+
+          <div className="field-row">
+            <div>
+              <label className="field-label">Maintenance</label>
+              <input
+                className="field-input"
+                type="text"
+                value={form.maintenance}
+                onChange={update("maintenance")}
+              />
+            </div>
+
+            <div>
+              <label className="field-label">Last Checkup</label>
+              <input
+                className="field-input"
+                type="date"
+                value={form.lastCheckup}
+                onChange={update("lastCheckup")}
+              />
+            </div>
+          </div>
+
+          <h4>Other Information</h4>
+
+          <div className="field-row">
+            <div>
+              <label className="field-label">Civil Status</label>
+              <input
+                className="field-input"
+                type="text"
+                value={form.civilStatus}
+                onChange={update("civilStatus")}
+              />
+            </div>
+
+            <div>
+              <label className="field-label">OSCA ID Status</label>
+              <select
+                className="field-input"
+                value={form.oscaId}
+                onChange={update("oscaId")}
+              >
+                <option value="Active">Active</option>
+                <option value="Inactive">Inactive</option>
+              </select>
+            </div>
+          </div>
+
+          <label className="field-label">Emergency Contact</label>
+          <input
+            className="field-input"
+            type="text"
+            value={form.emergencyContact}
+            onChange={update("emergencyContact")}
+          />
+
+          <label className="field-label">Relationship</label>
+          <input
+            className="field-input"
+            type="text"
+            value={form.relationship}
+            onChange={update("relationship")}
+          />
+
+          <div className="modal-actions">
+            <button
+              type="button"
+              className="btn-outline"
+              onClick={onClose}
+            >
+              Cancel
+            </button>
+
+            <button type="submit" className="btn-primary">
+              Save Changes
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
 
 function RecordPanel({ record, onClose }) {
   if (!record) return null;
+function EditSeniorModal({ record, onClose, onSave }) {
+  const [form, setForm] = useState({
+    name: record.name || "",
+    age: record.age || "",
+    gender: record.gender || "Male",
+    purok: record.purok || PUROKS[0],
+    contact: record.contact || "",
 
+    bloodType: record.medical?.bloodType || "",
+    condition: record.medical?.condition || "",
+    maintenance: record.medical?.maintenance || "",
+    lastCheckup:
+      record.medical?.lastCheckup &&
+      record.medical.lastCheckup !== "-"
+        ? String(record.medical.lastCheckup).slice(0, 10)
+        : "",
+
+    civilStatus: record.other?.civilStatus || "",
+    emergencyContact: record.other?.emergencyContact || "",
+    relationship: record.other?.relationship || "",
+    oscaId: record.other?.oscaId || "Active",
+  });
+
+  const update = (field) => (e) => {
+    setForm((prev) => ({
+      ...prev,
+      [field]: e.target.value,
+    }));
+  };
+
+  const submit = (e) => {
+    e.preventDefault();
+    onSave(record.id, form);
+  };
+
+  return (
+    <div className="modal-overlay" onMouseDown={onClose}>
+      <div
+        className="modal-card"
+        onMouseDown={(e) => e.stopPropagation()}
+        style={{ maxHeight: "90vh", overflowY: "auto" }}
+      >
+        <div className="modal-header">
+          <h3>Edit Senior Record</h3>
+
+          <button
+            type="button"
+            className="modal-close"
+            onClick={onClose}
+          >
+            <FiX />
+          </button>
+        </div>
+
+        <form onSubmit={submit} className="modal-form">
+          <label className="field-label">Full Name</label>
+          <input
+            className="field-input"
+            type="text"
+            value={form.name}
+            onChange={update("name")}
+            required
+          />
+
+          <div className="field-row">
+            <div>
+              <label className="field-label">Age</label>
+              <input
+                className="field-input"
+                type="number"
+                min="60"
+                value={form.age}
+                onChange={update("age")}
+                required
+              />
+            </div>
+
+            <div>
+              <label className="field-label">Gender</label>
+              <select
+                className="field-input"
+                value={form.gender}
+                onChange={update("gender")}
+              >
+                {GENDERS.map((g) => (
+                  <option key={g} value={g}>
+                    {g}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="field-row">
+            <div>
+              <label className="field-label">Purok</label>
+              <select
+                className="field-input"
+                value={form.purok}
+                onChange={update("purok")}
+              >
+                {PUROKS.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="field-label">Contact Number</label>
+              <input
+                className="field-input"
+                type="text"
+                value={form.contact}
+                onChange={update("contact")}
+              />
+            </div>
+          </div>
+
+          <h4>Medical Information</h4>
+
+          <div className="field-row">
+            <div>
+              <label className="field-label">Blood Type</label>
+              <input
+                className="field-input"
+                type="text"
+                value={form.bloodType}
+                onChange={update("bloodType")}
+              />
+            </div>
+
+            <div>
+              <label className="field-label">Condition</label>
+              <input
+                className="field-input"
+                type="text"
+                value={form.condition}
+                onChange={update("condition")}
+              />
+            </div>
+          </div>
+
+          <div className="field-row">
+            <div>
+              <label className="field-label">Maintenance</label>
+              <input
+                className="field-input"
+                type="text"
+                value={form.maintenance}
+                onChange={update("maintenance")}
+              />
+            </div>
+
+            <div>
+              <label className="field-label">Last Checkup</label>
+              <input
+                className="field-input"
+                type="date"
+                value={form.lastCheckup}
+                onChange={update("lastCheckup")}
+              />
+            </div>
+          </div>
+
+          <h4>Other Information</h4>
+
+          <div className="field-row">
+            <div>
+              <label className="field-label">Civil Status</label>
+              <input
+                className="field-input"
+                type="text"
+                value={form.civilStatus}
+                onChange={update("civilStatus")}
+              />
+            </div>
+
+            <div>
+              <label className="field-label">OSCA ID Status</label>
+              <select
+                className="field-input"
+                value={form.oscaId}
+                onChange={update("oscaId")}
+              >
+                <option value="Active">Active</option>
+                <option value="Inactive">Inactive</option>
+              </select>
+            </div>
+          </div>
+
+          <label className="field-label">Emergency Contact</label>
+          <input
+            className="field-input"
+            type="text"
+            value={form.emergencyContact}
+            onChange={update("emergencyContact")}
+          />
+
+          <label className="field-label">Relationship</label>
+          <input
+            className="field-input"
+            type="text"
+            value={form.relationship}
+            onChange={update("relationship")}
+          />
+
+          <div className="modal-actions">
+            <button
+              type="button"
+              className="btn-outline"
+              onClick={onClose}
+            >
+              Cancel
+            </button>
+
+            <button type="submit" className="btn-primary">
+              Save Changes
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
   return (
     <aside className="record-panel">
       <button type="button" className="panel-close" onClick={onClose} aria-label="Close">
@@ -307,21 +766,66 @@ function RecordPanel({ record, onClose }) {
 /* ---------------------------------------------------------------- */
 
 export default function Records() {
-  const [records, setRecords] = useState(BASE_RECORDS);
+ 
+  const [records, setRecords] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState([]);
   const [filterOpen, setFilterOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const [selectedId, setSelectedId] = useState(2); // defaults to Juan Dela Cruz, matching the mockup
+  const [selectedId, setSelectedId] = useState(null);
   const [kebabOpenId, setKebabOpenId] = useState(null);
   const [addModalOpen, setAddModalOpen] = useState(false);
+  const [editingRecord, setEditingRecord] = useState(null);
 
   const filterRef = useOutsideClose(() => setFilterOpen(false));
   const kebabRef = useOutsideClose(() => setKebabOpenId(null));
 
   useEffect(() => {
-    setCurrentPage(1);
-  }, [searchQuery, statusFilter]);
+  getSeniorCitizens()
+    .then((data) => {
+      console.log("Laravel senior citizens:", data);
+
+      const formattedRecords = data.map((r) => ({
+        id: r.id,
+        seniorId: r.senior_id,
+         name: r.name,
+         age: r.age,
+        birthDate: r.birth_date? String(r.birth_date).slice(0, 10): "",
+        gender: r.gender,
+        purok: r.purok,
+        contact: r.contact || "",
+        status: r.status,
+        lastUpdated: new Date(r.updated_at),
+        subNote: "Updated from database",
+
+        medical: {
+          bloodType: r.blood_type || "-",
+          condition: r.condition || "None noted",
+          maintenance: r.maintenance || "None",
+          lastCheckup: r.last_checkup || "-",
+        },
+
+        other: {
+          civilStatus: r.civil_status || "-",
+          emergencyContact: r.emergency_contact || "-",
+          relationship: r.relationship || "-",
+          oscaId: r.osca_id || "Active",
+        },
+      }));
+
+      console.log("Formatted records:", formattedRecords);
+
+      setRecords(formattedRecords);
+    })
+    .catch((error) => {
+      console.error("Failed to load senior citizens:", error);
+    });
+}, []);
+
+useEffect(() => {
+  setCurrentPage(1);
+}, [searchQuery, statusFilter]);
+
 
   const stats = useMemo(
     () => ({
@@ -372,44 +876,168 @@ export default function Records() {
     setStatusFilter((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]));
   };
 
-  const toggleArchive = (id) => {
+  const toggleArchive = async (id) => {
+  const record = records.find((r) => r.id === id);
+
+  if (!record) return;
+
+  const newStatus =
+    record.status === "Archived" ? "Active" : "Archived";
+
+  try {
+    const updated = await updateSeniorCitizen(id, {
+      status: newStatus,
+    });
+
     setRecords((prev) =>
       prev.map((r) =>
         r.id === id
-          ? { ...r, status: r.status === "Archived" ? r._prevStatus || "Active" : "Archived", _prevStatus: r.status }
+          ? {
+              ...r,
+              status: updated.status,
+              lastUpdated: new Date(updated.updated_at),
+            }
           : r
       )
     );
-    setKebabOpenId(null);
-  };
+  } catch (error) {
+    console.error("Failed to archive senior:", error);
+    alert("Unable to update senior citizen.");
+  }
 
-  const deleteRecord = (id) => {
-    if (window.confirm("Delete this senior record? This cannot be undone.")) {
-      setRecords((prev) => prev.filter((r) => r.id !== id));
-      if (selectedId === id) setSelectedId(null);
+  setKebabOpenId(null);
+};
+
+  const deleteRecord = async (id) => {
+  if (!window.confirm("Delete this senior record? This cannot be undone.")) {
+    setKebabOpenId(null);
+    return;
+  }
+
+  try {
+    await deleteSeniorCitizen(id);
+
+    setRecords((prev) => prev.filter((r) => r.id !== id));
+
+    if (selectedId === id) {
+      setSelectedId(null);
     }
-    setKebabOpenId(null);
-  };
+  } catch (error) {
+    console.error("Failed to delete senior:", error);
+    alert("Unable to delete senior citizen.");
+  }
 
-  const handleAddSenior = (form) => {
-    const newId = Math.max(...records.map((r) => r.id)) + 1;
-    const newRecord = {
-      id: newId,
-      seniorId: `SC-2026-${String(newId).padStart(4, "0")}`,
+  setKebabOpenId(null);
+};
+
+  const handleAddSenior = async (form) => {
+  try {
+    const created = await createSeniorCitizen({
       name: form.name,
       age: Number(form.age),
+      birth_date: form.birthDate || null,
       gender: form.gender,
       purok: form.purok,
       contact: form.contact,
-      status: "Active",
-      lastUpdated: new Date(),
-      subNote: "Updated today",
-      medical: { bloodType: "-", condition: "None noted", maintenance: "None", lastCheckup: "-" },
-      other: { civilStatus: "-", emergencyContact: "-", relationship: "-", oscaId: "Active" },
+    });
+
+    const newRecord = {
+      id: created.id,
+      seniorId: created.senior_id,
+      name: created.name,
+      age: created.age,
+      birthDate: created.birth_date
+  ? String(created.birth_date).slice(0, 10)
+  : "",
+      gender: created.gender,
+      purok: created.purok,
+      contact: created.contact || "",
+      status: created.status,
+      lastUpdated: new Date(created.updated_at),
+      subNote: "Updated from database",
+
+      medical: {
+        bloodType: created.blood_type || "-",
+        condition: created.condition || "None noted",
+        maintenance: created.maintenance || "None",
+        lastCheckup: created.last_checkup || "-",
+      },
+
+      other: {
+        civilStatus: created.civil_status || "-",
+        emergencyContact: created.emergency_contact || "-",
+        relationship: created.relationship || "-",
+        oscaId: created.osca_id || "Active",
+      },
     };
+
     setRecords((prev) => [newRecord, ...prev]);
     setAddModalOpen(false);
-  };
+  } catch (error) {
+    console.error("Failed to add senior:", error);
+    alert("Unable to add senior citizen.");
+  }
+};
+
+const handleEditSenior = async (id, form) => {
+  try {
+    const updated = await updateSeniorCitizen(id, {
+      name: form.name,
+      age: Number(form.age),
+      birth_date: form.birthDate || null,
+      gender: form.gender,
+      purok: form.purok,
+      contact: form.contact,
+
+      blood_type: form.bloodType || null,
+      condition: form.condition || null,
+      maintenance: form.maintenance || null,
+      last_checkup: form.lastCheckup || null,
+
+      civil_status: form.civilStatus || null,
+      emergency_contact: form.emergencyContact || null,
+      relationship: form.relationship || null,
+      osca_id: form.oscaId,
+    });
+
+    setRecords((prev) =>
+      prev.map((r) =>
+        r.id === id
+          ? {
+              ...r,
+              name: updated.name,
+              age: updated.age,
+              birthDate: updated.birth_date? String(updated.birth_date).slice(0, 10): "",
+              gender: updated.gender,
+              purok: updated.purok,
+              contact: updated.contact || "",
+              status: updated.status,
+              lastUpdated: new Date(updated.updated_at),
+
+              medical: {
+                bloodType: updated.blood_type || "-",
+                condition: updated.condition || "None noted",
+                maintenance: updated.maintenance || "None",
+                lastCheckup: updated.last_checkup || "-",
+              },
+
+              other: {
+                civilStatus: updated.civil_status || "-",
+                emergencyContact: updated.emergency_contact || "-",
+                relationship: updated.relationship || "-",
+                oscaId: updated.osca_id || "Active",
+              },
+            }
+          : r
+      )
+    );
+
+    setEditingRecord(null);
+  } catch (error) {
+    console.error("Failed to edit senior:", error);
+    alert("Unable to update senior citizen.");
+  }
+};
 
   const pageNumbers = useMemo(() => {
     const pages = [];
@@ -587,15 +1215,43 @@ export default function Records() {
                             </button>
                             {kebabOpenId === r.id && (
                               <div className="dropdown-menu kebab-menu">
-                                <button type="button" className="dropdown-item" onClick={() => { setSelectedId(r.id); setKebabOpenId(null); }}>
-                                  View Details
-                                </button>
-                                <button type="button" className="dropdown-item" onClick={() => toggleArchive(r.id)}>
-                                  {r.status === "Archived" ? "Unarchive" : "Archive"}
-                                </button>
-                                <button type="button" className="dropdown-item danger" onClick={() => deleteRecord(r.id)}>
-                                  Delete Record
-                                </button>
+                                <button
+                           type="button"
+                   className="dropdown-item"
+                     onClick={() => {
+                        setSelectedId(r.id);
+                         setKebabOpenId(null);
+                                    }}
+                                    >
+                                 View Details
+                         </button>
+
+                  <button                   
+                       type="button"
+                       className="dropdown-item"
+                                 onClick={() => {
+                                       setEditingRecord(r);
+                                        setKebabOpenId(null);
+                                               }}
+                                            >
+                                 Edit Record
+                                  </button>
+
+                          <button
+                        type="button"
+                            className="dropdown-item"
+                                     onClick={() => toggleArchive(r.id)}
+                                          >
+                                     {r.status === "Archived" ? "Unarchive" : "Archive"}
+                                            </button>
+
+                                              <button
+                                             type="button"
+                                   className="dropdown-item danger"
+                                       onClick={() => deleteRecord(r.id)}
+                                   >
+                               Delete Record
+                             </button>           
                               </div>
                             )}
                           </div>
@@ -657,6 +1313,7 @@ export default function Records() {
 
       {selectedRecord && <RecordPanel record={selectedRecord} onClose={() => setSelectedId(null)} />}
       {addModalOpen && <AddSeniorModal onClose={() => setAddModalOpen(false)} onSave={handleAddSenior} />}
+        {editingRecord && <EditSeniorModal record={editingRecord} onClose={() => setEditingRecord(null)} onSave={handleEditSenior}/>}
     </div>
   );
 }
